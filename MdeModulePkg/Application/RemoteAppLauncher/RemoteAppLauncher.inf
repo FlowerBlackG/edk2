@@ -1,0 +1,54 @@
+# 
+# Remote App Launcher
+# 
+#   Load binary from remote host and run.
+#
+# gongty [at] tongji [dot] edu [dot] cn
+# created on 2024.12.6 at Jiangchuan, Minhang, Shanghai
+#
+
+
+[Defines]
+  INF_VERSION                    = 0x00010005
+  BASE_NAME                      = RemoteAppLauncher
+  FILE_GUID                      = 3699C053-C992-4817-B355-A77A489E0063
+  MODULE_TYPE                    = UEFI_APPLICATION
+  VERSION_STRING                 = 1.0
+  ENTRY_POINT                    = ShellCEntryLib
+
+
+[Sources]
+  Main.c
+
+
+[Packages]
+  MdePkg/MdePkg.dec
+  MdeModulePkg/MdeModulePkg.dec
+  ShellPkg/ShellPkg.dec
+  NetworkPkg/NetworkPkg.dec
+
+
+[LibraryClasses]
+  BaseLib
+  BaseMemoryLib
+  MemoryAllocationLib
+  PrintLib
+  UefiApplicationEntryPoint
+  UefiBootServicesTableLib
+  UefiLib
+  ShellLib
+  ShellCEntryLib
+  NetLib
+
+
+[Protocols]
+  gEfiSimpleTextOutProtocolGuid
+  gEfiSimpleTextInProtocolGuid
+  gEfiTcp4ProtocolGuid
+  gEfiTcp4ServiceBindingProtocolGuid
+
+
+[FeaturePcd]
+
+[Pcd]
+

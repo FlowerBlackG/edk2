@@ -1057,3 +1057,6 @@
   # TPM support
   #
 !include OvmfPkg/Include/Dsc/OvmfTpmComponentsDxe.dsc.inc
+
+
+MdeModulePkg/Application/RemoteAppLauncher/RemoteAppLauncher.inf
