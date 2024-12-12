@@ -19,6 +19,10 @@
 
 [Sources]
   Main.c
+  Utils.h
+  Utils.c
+  VesperProtocol.h
+  VesperProtocol.c
 
 
 [Packages]
