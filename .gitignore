@@ -8,5 +8,4 @@ tags/
 .venv/
 
 run-ovmf/
-Makefile
 debug.log
