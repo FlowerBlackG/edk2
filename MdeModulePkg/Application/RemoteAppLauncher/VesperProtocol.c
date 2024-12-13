@@ -13,6 +13,7 @@
 
 
 #include <Library/DebugLib.h>
+#include <Library/MemoryAllocationLib.h>
 #include "./VesperProtocol.h"
 
 
@@ -80,10 +81,12 @@ VesperProtocolSend (
 
 
   VESPER_PROTOCOL_HEADER Header;
-  MakeHeader(Type, 0, &Header);
+  MakeHeader(Type, DataLen, &Header);
 
   UINT32 HeaderSize = sizeof(Header);
   UINT64 MsgSize = HeaderSize + DataLen;
+
+  DEBUG((DEBUG_INFO, "Type: 0x%x, MsgSize: %d\n", Type, MsgSize));
 
 
   // Vesper Protocol supports messages larger than 4G, but edk2 doesn't support
@@ -106,8 +109,8 @@ VesperProtocolSend (
   }
 
 
-  CopyMem ((VOID*) BufData, (VOID*) &Header, HeaderSize);
-  CopyMem ((VOID*) (BufData + HeaderSize), (VOID*) Data, DataLen);
+  CopyMem (BufData, &Header, HeaderSize);
+  CopyMem (BufData + HeaderSize, Data, DataLen);
   
   if (EFI_ERROR(Status = TcpIoTransmit(TcpIo, NetBuf))) {
     DEBUG((DEBUG_ERROR, "Failed to send Vesper Protocol msg! %r\n", Status));
@@ -141,14 +144,19 @@ VesperProtocolSendListFilesMsg (
 EFI_STATUS
 EFIAPI
 VesperProtocolSendFetchFileMsg (
-  IN TCP_IO *TcpIo
+  IN TCP_IO *TcpIo,
+  IN UINT64 FileId
   )  
 {
+
+  UINT64 FileIdNet = htonq(FileId);
+
+
   return VesperProtocolSend (
     TcpIo,
     VESPER_PROTOCOL_TYPE_FETCH_FILE,
-    0, 
-    NULL
+    sizeof(FileIdNet), 
+    (UINT8 *) &FileIdNet
   );
 }
 
@@ -222,18 +230,69 @@ VesperProtocolRecv (
   EFI_STATUS Status = EFI_SUCCESS;
 
   VESPER_PROTOCOL_HEADER Header;
+  UINT32 HeaderSize = sizeof (Header);
 
   if (EFI_ERROR(Status = VesperProtocolRecvHeader(TcpIo, &Header))) {
     DEBUG((DEBUG_ERROR, "Failed to recv Vesper Protocol header!\n"));
     return Status;
   }
 
-  if (Header.Length > __UINT32_MAX__)
+  if (Header.Length + HeaderSize > __UINT32_MAX__)  // Msg larger than 4G is not supported yet.
     return EFI_PROTOCOL_ERROR;
 
-  // TODO
+  UINT32 MsgSize = (UINT32) (Header.Length + HeaderSize);
+
+  VESPER_PROTOCOL_MSG *ProtocolMsg = AllocatePool (MsgSize);
+  NET_BUF *NetBuf = NULL;
+  UINT8 *Data;
+  if (EFI_ERROR(Status = AllocNetBufWithSpace((UINT32) Header.Length, &NetBuf, &Data))) {
+    DEBUG((DEBUG_ERROR, "Failed to allocate netbuf with space!\n"));
+    goto END;
+  }
+
+
+  if (EFI_ERROR(Status = TcpIoReceive(TcpIo, NetBuf, FALSE, NULL))) {
+    DEBUG((DEBUG_ERROR, "Failed to receive msg body! %r\n", Status));
+    goto END;
+  }
+
+
+  CopyMem (&ProtocolMsg->Header, &Header, HeaderSize);
+  CopyMem (ProtocolMsg->Data, Data, Header.Length);
 
 END:
 
+  if (EFI_ERROR(Status)) {  // Failed.
+    FreePool (ProtocolMsg);
+  }
+  else {  // Success.
+    *Msg = ProtocolMsg;
+  }
+
+  if (NetBuf) {
+    NetbufFree(NetBuf);
+    NetBuf = NULL;
+  }
+
   return Status;
+}
+
+
+
+EFI_STATUS
+EFIAPI
+VesperProtocolRecvResponse (
+  IN TCP_IO *TcpIo,
+  OUT VESPER_PROTOCOL_RESPONSE **Msg
+  )
+{
+  EFI_STATUS Status = VesperProtocolRecv(TcpIo, (VESPER_PROTOCOL_MSG **) Msg);
+
+  if (EFI_ERROR(Status))
+    return Status;
+
+  (*Msg)->Body.Code = ntohl((*Msg)->Body.Code);
+  (*Msg)->Body.MsgLen = ntohl((*Msg)->Body.MsgLen);
+
+  return EFI_SUCCESS;
 }

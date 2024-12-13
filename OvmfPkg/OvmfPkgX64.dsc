@@ -1060,3 +1060,5 @@
 
 
 MdeModulePkg/Application/RemoteAppLauncher/RemoteAppLauncher.inf
+MdeModulePkg/Application/HelloWorld/HelloWorld.inf
+

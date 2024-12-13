@@ -13,9 +13,10 @@ QEMU := qemu-system-x86_64
 
 
 QEMU += -pflash run-ovmf/bios.bin  
-QEMU += -hda fat:rw:run-ovmf/hda-contents 
 QEMU += -debugcon file:debug.log -global isa-debugcon.iobase=0x402 
+
 QEMU += -drive file=fat:rw:run-ovmf/efis,id=fat32,format=raw  
+
 
 QEMU += -enable-kvm 
 QEMU += -m 4G  

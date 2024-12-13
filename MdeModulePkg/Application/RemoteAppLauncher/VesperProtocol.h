@@ -75,7 +75,8 @@ VesperProtocolSendListFilesMsg (
 EFI_STATUS
 EFIAPI
 VesperProtocolSendFetchFileMsg (
-  IN TCP_IO *TcpIo
+  IN TCP_IO *TcpIo,
+  IN UINT64 FileId
   );
 
 
@@ -87,10 +88,26 @@ VesperProtocolRecvHeader (
   );
 
 
+/**
+ * The caller is responsible for freeing Msg (by calling FreePool) 
+ * when result is EFI_SUCCESS.
+ */
 EFI_STATUS
 EFIAPI
 VesperProtocolRecv (
   IN TCP_IO *TcpIo,
   OUT VESPER_PROTOCOL_MSG **Msg
+  );
+
+
+/**
+ * The caller is responsible for freeing Msg (by calling FreePool) 
+ * when result is EFI_SUCCESS.
+ */
+EFI_STATUS
+EFIAPI
+VesperProtocolRecvResponse (
+  IN TCP_IO *TcpIo,
+  OUT VESPER_PROTOCOL_RESPONSE **Msg
   );
 

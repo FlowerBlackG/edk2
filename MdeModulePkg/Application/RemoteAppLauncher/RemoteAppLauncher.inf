@@ -14,7 +14,7 @@
   FILE_GUID                      = 3699C053-C992-4817-B355-A77A489E0063
   MODULE_TYPE                    = UEFI_APPLICATION
   VERSION_STRING                 = 1.0
-  ENTRY_POINT                    = ShellCEntryLib
+  ENTRY_POINT                    = UefiMain
 
 
 [Sources]
@@ -23,6 +23,8 @@
   Utils.c
   VesperProtocol.h
   VesperProtocol.c
+  HexView.h
+  HexView.c
 
 
 [Packages]
@@ -42,7 +44,6 @@
   UefiBootServicesTableLib
   UefiLib
   ShellLib
-  ShellCEntryLib
   NetLib
   PcdLib
   TcpIoLib
@@ -54,6 +55,7 @@
   gEfiTcp4ProtocolGuid
   gEfiTcp4ServiceBindingProtocolGuid
   gEfiManagedNetworkServiceBindingProtocolGuid
+  gEfiShellProtocolGuid
 
 
 [FeaturePcd]
