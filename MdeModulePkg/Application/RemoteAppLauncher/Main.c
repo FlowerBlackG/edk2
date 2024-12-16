@@ -677,7 +677,7 @@ SaveEfiAppBinaryAndExecute (
     CopyMem (Command + FilePathLen + 1, Cli, CliLen * sizeof (CHAR16));
 
     
-    // Disable nesting for shell.
+    // Disable nesting shell.
 
     CONST CHAR16 *NoNestingEnvVarKey = L"nonesting";
     CONST CHAR16 *NoNestingEnvVarNewValue = L"True";
