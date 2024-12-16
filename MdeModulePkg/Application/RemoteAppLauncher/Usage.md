@@ -72,6 +72,12 @@ Example:
 ./RemoteAppLauncher.efi --cli "-Wall -o app app.c"
 ```
 
+### --no-execute
+
+Skip execution.
+
+You can use this flag for senarios like testing or just download a file.
+
 ## Examples
 
 ### Query apps available on remote

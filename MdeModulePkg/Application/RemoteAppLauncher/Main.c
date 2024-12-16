@@ -75,6 +75,7 @@ struct {
   CHAR16 *Cli;
 
   BOOLEAN RemoveBinaryAfterExecution;
+  BOOLEAN NoExecute;
 
 } STATIC CliArgs;
 
@@ -178,6 +179,11 @@ ParseCli (
     
     if (StrCmp(Arg, L"--remove-binary-after-execution") == 0) {
       CliArgs.RemoveBinaryAfterExecution = TRUE;
+      continue;
+    }
+
+    if (StrCmp(Arg, L"--no-execute") == 0) {
+      CliArgs.NoExecute = TRUE;
       continue;
     }
 
@@ -606,6 +612,7 @@ SaveEfiAppBinaryAndExecute (
   IN UINTN BinarySize,
   IN CHAR16 *FilePath,
   IN BOOLEAN RemoveFileAfterExecution,
+  IN BOOLEAN SkipExecute,
   IN CHAR16 *Cli OPTIONAL
   )
 {
@@ -648,37 +655,56 @@ SaveEfiAppBinaryAndExecute (
   }
   
 
-  // Make command.
+  CHAR16 *Command = NULL;
+  if (!SkipExecute) {
+    // Make command.
 
-  UINTN FilePathLen = StrLen (FilePath);
-  UINTN CliLen = Cli ? StrLen (Cli) : 0;
+    UINTN FilePathLen = StrLen (FilePath);
+    UINTN CliLen = Cli ? StrLen (Cli) : 0;
 
-  // File + Blank between file and cli + cli
-  UINTN CommandLen = FilePathLen + !!CliLen + CliLen;
+    // File + Blank between file and cli + cli
+    UINTN CommandLen = FilePathLen + !!CliLen + CliLen;
 
-  CHAR16 *Command = AllocatePool (sizeof (CHAR16) * (CommandLen + 1));
-  if (!Command) {
-    Status = EFI_OUT_OF_RESOURCES;
-    goto END;
+    Command = AllocatePool (sizeof (CHAR16) * (CommandLen + 1));
+    if (!Command) {
+      Status = EFI_OUT_OF_RESOURCES;
+      goto END;
+    }
+
+    Command[FilePathLen] = L' ';
+    Command[CommandLen] = L'\0';
+    CopyMem (Command, FilePath, FilePathLen * sizeof (CHAR16));
+    CopyMem (Command + FilePathLen + 1, Cli, CliLen * sizeof (CHAR16));
+
+    
+    // Disable nesting for shell.
+
+    CONST CHAR16 *NoNestingEnvVarKey = L"nonesting";
+    CONST CHAR16 *NoNestingEnvVarNewValue = L"True";
+
+    CONST CHAR16 *NoNestingEnvVarOldValue = ShellGetEnvironmentVariable (NoNestingEnvVarKey);
+    
+    ShellSetEnvironmentVariable (NoNestingEnvVarKey, NoNestingEnvVarNewValue, TRUE);
+    
+
+    // Execute.
+
+    EFI_STATUS ChildStatus;
+
+    // Vulnerability: Sub-process can modify parent's environment!
+    Status = ShellExecute (&AppImageHandle, Command, TRUE, NULL, &ChildStatus);
+
+    // Restore nesting option.
+
+    ShellSetEnvironmentVariable (NoNestingEnvVarKey, NoNestingEnvVarOldValue, TRUE);
+
+    if (EFI_ERROR(Status)) {
+      Print(L"Failed to execute binary!\r\n");
+      goto END;
+    }
+
+    Print(L"Child finished with status: %r\r\n", ChildStatus);
   }
-
-  Command[FilePathLen] = L' ';
-  Command[CommandLen] = L'\0';
-  CopyMem (Command, FilePath, FilePathLen * sizeof (CHAR16));
-  CopyMem (Command + FilePathLen + 1, Cli, CliLen * sizeof (CHAR16));
-
-  
-  EFI_STATUS ChildStatus;
-
-  // Vulnerability: Sub-process can modify parent's environment!
-  Status = ShellExecute (&AppImageHandle, Command, TRUE, NULL, &ChildStatus);
-
-  if (EFI_ERROR(Status)) {
-    Print(L"Failed to execute binary!\r\n");
-    goto END;
-  }
-
-  Print(L"Child finished with status: %r\r\n", ChildStatus);
 
 
 END:
@@ -735,6 +761,7 @@ DoLoadFile (
     FileSize, 
     PathToSaveLoadedBinary, 
     CliArgs.RemoveBinaryAfterExecution || !CliArgs.SaveBinaryToSet,
+    CliArgs.NoExecute,
     CliArgs.Cli
   );
 
@@ -819,6 +846,7 @@ UefiMain (
 
 
   if (EFI_ERROR(Status = TcpIoConnect(TcpIo, NULL))) {
+    Print(L"Failed on TCP connect! Check IP and Port and retry.\r\n");
     DEBUG((DEBUG_ERROR, "Failed on TCP connect!\n"));
     return Status;
   }
