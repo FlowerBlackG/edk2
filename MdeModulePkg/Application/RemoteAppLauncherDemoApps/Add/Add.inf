@@ -1,0 +1,50 @@
+# 
+# Remote App Launcher Demo App : Add
+#
+# gongty [at] tongji [dot] edu [dot] cn
+# created on 2024.12.16 at Jiangchuan, Minhang, Shanghai
+#
+
+
+[Defines]
+  INF_VERSION                    = 0x00010005
+  BASE_NAME                      = Add
+  FILE_GUID                      = 638a2d20-377d-4d68-bd15-11c8b240f57c
+  MODULE_TYPE                    = UEFI_APPLICATION
+  VERSION_STRING                 = 1.0
+  ENTRY_POINT                    = ShellCEntryLib
+
+
+[Sources]
+  Main.c
+
+
+[Packages]
+  MdePkg/MdePkg.dec
+  MdeModulePkg/MdeModulePkg.dec
+  ShellPkg/ShellPkg.dec
+  OvmfPkg/OvmfPkg.dec
+
+
+[LibraryClasses]
+  BaseLib
+  BaseMemoryLib
+  PrintLib
+  UefiApplicationEntryPoint
+  UefiBootServicesTableLib
+  UefiLib
+  ShellLib
+  ShellCEntryLib
+  PcdLib
+
+
+[Protocols]
+  gEfiSimpleTextOutProtocolGuid
+  gEfiSimpleTextInProtocolGuid
+  gEfiShellProtocolGuid
+
+
+[FeaturePcd]
+
+[Pcd]
+

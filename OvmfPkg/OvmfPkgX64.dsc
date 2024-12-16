@@ -1060,5 +1060,9 @@
 
 
 MdeModulePkg/Application/RemoteAppLauncher/RemoteAppLauncher.inf
+
 MdeModulePkg/Application/HelloWorld/HelloWorld.inf
+
+MdeModulePkg/Application/RemoteAppLauncherDemoApps/HexView/HexView.inf
+MdeModulePkg/Application/RemoteAppLauncherDemoApps/Add/Add.inf
 

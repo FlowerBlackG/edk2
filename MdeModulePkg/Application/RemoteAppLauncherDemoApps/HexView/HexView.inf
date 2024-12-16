@@ -1,0 +1,54 @@
+# 
+# Remote App Launcher Demo App : Hex View
+#
+# gongty [at] tongji [dot] edu [dot] cn
+# created on 2024.12.16 at Jiangchuan, Minhang, Shanghai
+#
+
+
+[Defines]
+  INF_VERSION                    = 0x00010005
+  BASE_NAME                      = HexView
+  FILE_GUID                      = a848236d-acf3-4f0a-a098-afa0c5b61c31
+  MODULE_TYPE                    = UEFI_APPLICATION
+  VERSION_STRING                 = 1.0
+  ENTRY_POINT                    = ShellCEntryLib
+
+
+[Sources]
+  Main.c
+  Utils.h
+  Utils.c
+  HexView.h
+  HexView.c
+
+
+[Packages]
+  MdePkg/MdePkg.dec
+  MdeModulePkg/MdeModulePkg.dec
+  ShellPkg/ShellPkg.dec
+  OvmfPkg/OvmfPkg.dec
+
+
+[LibraryClasses]
+  BaseLib
+  BaseMemoryLib
+  PrintLib
+  UefiApplicationEntryPoint
+  UefiBootServicesTableLib
+  UefiLib
+  ShellLib
+  ShellCEntryLib
+  PcdLib
+
+
+[Protocols]
+  gEfiSimpleTextOutProtocolGuid
+  gEfiSimpleTextInProtocolGuid
+  gEfiShellProtocolGuid
+
+
+[FeaturePcd]
+
+[Pcd]
+
