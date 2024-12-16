@@ -27,7 +27,7 @@ Every message begins with a header like this:
 +-------------------+
 ```
 
-* magic (uint32): Fixed. ASCII: `KpBL`
+* magic (uint32): Fixed. ASCII: `dDSt`
 * type (uint32): Command identifier. Continue reading to learn more.
 * length (uint64): Size of the message without header.
 

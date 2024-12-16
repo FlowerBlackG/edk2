@@ -27,7 +27,7 @@ App Server Protocol（应用服务器通信协议，“协议”）是一种特�
 +-------------------+
 ```
 
-* magic (uint32): 协议魔数。固定为 `KpBL`
+* magic (uint32): 协议魔数。固定为 `dDSt`
 * type (uint32): 指令识别码。见具体指令
 * length (uint64): 报文总长度（不含 header）
 

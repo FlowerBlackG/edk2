@@ -46,7 +46,7 @@ STATIC EFI_HANDLE NetDeviceHandle = NULL;
 
 STATIC TCP_IO *TcpIo = NULL;
 
-STATIC EFI_HANDLE *AppImageHandle = NULL;
+STATIC EFI_HANDLE AppImageHandle = NULL;
 STATIC EFI_SYSTEM_TABLE *AppSystemTable = NULL;
 
 
@@ -59,7 +59,6 @@ struct {
   BOOLEAN ActionLoadFile;
 
   
-
   BOOLEAN IpAddrSet;
   EFI_IPv4_ADDRESS Ip4Addr;
 
@@ -68,6 +67,15 @@ struct {
 
   BOOLEAN FileIdSet;
   UINT64 FileId;
+
+  BOOLEAN SaveBinaryToSet;
+  CHAR16 *SaveBinaryTo;
+
+  BOOLEAN CliSet;
+  CHAR16 *Cli;
+
+  BOOLEAN RemoveBinaryAfterExecution;
+
 } STATIC CliArgs;
 
 
@@ -95,16 +103,7 @@ ParseCli (
 {
   ZeroMem ( &CliArgs, sizeof(CliArgs) );
   UINTN Pos = 1;
-
-// TODO
-CliArgs.Port = 20024;
-CliArgs.PortSet = TRUE;
-CliArgs.ActionLoadFile = TRUE;
-CliArgs.FileId = 33;
-CliArgs.FileIdSet = TRUE;
-CliArgs.IpAddrSet = TRUE;
-NetLibStrToIp4(L"202.120.37.25", &CliArgs.Ip4Addr);
-
+  
 
   while (Pos < Argc) {
 
@@ -172,6 +171,40 @@ NetLibStrToIp4(L"202.120.37.25", &CliArgs.Ip4Addr);
       }
 
       CliArgs.IpAddrSet = TRUE;
+
+      continue;
+    }
+
+    
+    if (StrCmp(Arg, L"--remove-binary-after-execution") == 0) {
+      CliArgs.RemoveBinaryAfterExecution = TRUE;
+      continue;
+    }
+
+
+    if (StrCmp(Arg, L"--save-binary-to") == 0) {
+
+      if (Pos == Argc) {
+        Print(L"No value for --save-binary-to !\r\n");
+        return EFI_INVALID_PARAMETER;
+      }
+
+      CliArgs.SaveBinaryTo = Argv[Pos++];
+      CliArgs.SaveBinaryToSet = TRUE;
+
+      continue;
+    }
+
+    
+    if (StrCmp(Arg, L"--cli") == 0) {
+
+      if (Pos == Argc) {
+        Print(L"No value for --cli !\r\n");
+        return EFI_INVALID_PARAMETER;
+      }
+
+      CliArgs.Cli = Argv[Pos++];
+      CliArgs.CliSet = TRUE;
 
       continue;
     }
@@ -402,7 +435,6 @@ CleanUp()
 }
 
 
-
 /**
  * The caller is responsible for freeing ResponseMsg (by calling FreePool) 
  * when result is EFI_SUCCESS.
@@ -500,23 +532,167 @@ DoListFiles ()
 }
 
 
-typedef struct {
-  int counter;
-  VESPER_PROTOCOL_MSG *r;
-} HVD;
 
-static void todo_w (int ch, void* data) {
-  //HVD* h = (HVD*) data;
-  char buf[2] = "";
-  buf[0] = (char)ch;
-  DEBUG((DEBUG_INFO, buf));
+/**
+ * The caller is responsible for freeing Path (by calling FreePool) 
+ * when result is EFI_SUCCESS.
+ */
+STATIC
+EFI_STATUS
+EFIAPI
+FindPathToSaveLoadedBinary (
+  OUT CHAR16 **Path
+  )
+{
+  if (CliArgs.SaveBinaryToSet) {
+    UINTN Len = StrLen (CliArgs.SaveBinaryTo);
+    *Path = AllocatePool (sizeof(CHAR16) * (Len + 1));
+    
+    if (!Path)
+      return EFI_OUT_OF_RESOURCES;
+
+    CopyMem (*Path, CliArgs.SaveBinaryTo, sizeof(CHAR16) * (Len + 1));
+    return EFI_SUCCESS;
+  }
+
+
+  CONST CHAR16 *FallbackFilePaths[] = {
+    L"d7c9b44f-60b5-4ac8-919c-ea1f7a112b94.efi",
+    L"b58a777e-a5bb-4c89-a0ca-4467c103a002.efi",
+    L"e3dd8ab2-4251-407f-8ae3-36df9cab1279.efi",
+    L"844cfc62-c7aa-4d49-82de-67ac5871f33a.efi",
+    L"39774e4b-1d96-474a-bb69-5e32ea17221a.efi",
+    L"74542af7-2c22-47de-9e43-be3eaf3971ab.efi",
+    L"55dbb818-c3ee-4286-90ac-bcc96739bce8.efi",
+    L"25d51515-3897-445e-bf16-d35a9dd8b698.efi",
+    L"954ccacf-1673-4112-8326-2b4c8bb5b350.efi",
+    L"23caf1e5-424f-4bd4-bde3-b36a02c923ee.efi",
+    L"3e9d8396-f6b3-4f9b-b603-9175843123b4.efi"
+  };
+
+  CONST UINTN CandidateCount = sizeof(FallbackFilePaths) / sizeof(FallbackFilePaths[0]);
+
+  for (UINTN i = 0; i < CandidateCount; i++) {
+    CONST CHAR16 *FileName = FallbackFilePaths[i];
+    
+    if ( ShellFileExists(FileName) == EFI_SUCCESS )
+      continue;
+
+    UINTN Len = StrLen (FileName);
+    *Path = AllocatePool (sizeof(CHAR16) * (Len + 1));
+
+    if (!Path)
+      return EFI_OUT_OF_RESOURCES;
+
+    CopyMem (*Path, FileName, sizeof(CHAR16) * (Len + 1));
+    return EFI_SUCCESS;
+  }
+
+
+  Print(
+    L"Failed to find a place to save loaded binary. "
+    "Perhaps you should specify --save-binary-to manually.\r\n"
+  );
+
+  return EFI_LOAD_ERROR;
 }
 
-static int todo_r ( void* data) {
-  HVD* h = (HVD*) data;
-  if (h->counter == h->r->Header.Length)
-    return -1;
-  return h->r->Data[h->counter++];
+
+STATIC
+EFI_STATUS
+EFIAPI
+SaveEfiAppBinaryAndExecute (
+  IN UINT8 *Binary,
+  IN UINTN BinarySize,
+  IN CHAR16 *FilePath,
+  IN BOOLEAN RemoveFileAfterExecution,
+  IN CHAR16 *Cli OPTIONAL
+  )
+{
+  if (!Binary || !FilePath || !BinarySize)
+    return EFI_INVALID_PARAMETER;
+
+  EFI_STATUS Status;
+
+  SHELL_FILE_HANDLE File;
+
+  Status = ShellOpenFileByName (
+    FilePath, 
+    &File,
+    EFI_FILE_MODE_CREATE | EFI_FILE_MODE_WRITE | EFI_FILE_MODE_READ, 
+    0
+  );
+
+  if (EFI_ERROR(Status)) {
+    Print(L"Failed to open file! %r\r\n", Status);
+    goto END;
+  }
+  
+  
+  UINT64 FileSize = BinarySize;
+  if (EFI_ERROR(Status = ShellWriteFile(File, &FileSize, Binary)) || FileSize != BinarySize) {
+    Print(L"Failed to save binary to: %s\r\n", FilePath);
+    goto END;
+  }
+
+
+  if (EFI_ERROR(Status = ShellFlushFile (File))) {
+    Print(L"Failed to flush file! %r\r\n", Status);
+    goto END;
+  }
+  
+
+  if (EFI_ERROR(Status = ShellCloseFile (&File))) {
+    Print(L"Failed to close file! %r\r\n", Status);
+    goto END;
+  }
+  
+
+  // Make command.
+
+  UINTN FilePathLen = StrLen (FilePath);
+  UINTN CliLen = Cli ? StrLen (Cli) : 0;
+
+  // File + Blank between file and cli + cli
+  UINTN CommandLen = FilePathLen + !!CliLen + CliLen;
+
+  CHAR16 *Command = AllocatePool (sizeof (CHAR16) * (CommandLen + 1));
+  if (!Command) {
+    Status = EFI_OUT_OF_RESOURCES;
+    goto END;
+  }
+
+  Command[FilePathLen] = L' ';
+  Command[CommandLen] = L'\0';
+  CopyMem (Command, FilePath, FilePathLen * sizeof (CHAR16));
+  CopyMem (Command + FilePathLen + 1, Cli, CliLen * sizeof (CHAR16));
+
+  
+  EFI_STATUS ChildStatus;
+
+  // Vulnerability: Sub-process can modify parent's environment!
+  Status = ShellExecute (&AppImageHandle, Command, TRUE, NULL, &ChildStatus);
+
+  if (EFI_ERROR(Status)) {
+    Print(L"Failed to execute binary!\r\n");
+    goto END;
+  }
+
+  Print(L"Child finished with status: %r\r\n", ChildStatus);
+
+
+END:
+
+  if (RemoveFileAfterExecution) {
+    ShellDeleteFileByName (FilePath);
+  }
+
+  if (Command) {
+    FreePool (Command);
+    Command = NULL;
+  }
+
+  return Status;
 }
 
 
@@ -534,102 +710,38 @@ DoLoadFile (
     return Status;
   }
 
-    DEBUG((DEBUG_INFO, "CP4\n"));
 
   VESPER_PROTOCOL_RESPONSE *Response = NULL;
 
   if (EFI_ERROR(Status = VesperProtocolRecvResponseAndDealError(TcpIo, &Response))) {
     return Status;
   }
-    DEBUG((DEBUG_INFO, "CP5\n"));
 
   UINT64 FileSize = Response->Body.MsgLen;
   UINT8 *FileData = Response->Body.Msg;
 
-
   DEBUG((DEBUG_INFO, "FileSize: %d\n", FileSize));
 
 
-  HVD h = {
-    .counter = 0,
-    .r = (VESPER_PROTOCOL_MSG*) Response
-  };
-
-  if (FALSE)
-    hexView(TRUE, todo_r, todo_w, &h);
-
-  Status = ShellInitialize ();
-
-  if (EFI_ERROR(Status)) {
-    DEBUG((DEBUG_ERROR, "Failed to init shell : %r\n", Status));
+  CHAR16 *PathToSaveLoadedBinary = NULL;
+  
+  if (EFI_ERROR(Status = FindPathToSaveLoadedBinary(&PathToSaveLoadedBinary))) {
     goto END;
   }
 
-  CHAR16 *FullFileName = ShellFindFilePath(L"HelloWorld.efi");
-  if (FullFileName)
-    Print(L"File at: %s\r\n", FullFileName);
-  else
-    Print(L"Not Fount!!\r\n");
-  SHELL_FILE_HANDLE File;
-  Status = ShellOpenFileByName (
-    L"Hell.efi", 
-    &File, 
-    EFI_FILE_MODE_CREATE | EFI_FILE_MODE_WRITE, 0
+
+  Status = SaveEfiAppBinaryAndExecute(
+    FileData, 
+    FileSize, 
+    PathToSaveLoadedBinary, 
+    CliArgs.RemoveBinaryAfterExecution || !CliArgs.SaveBinaryToSet,
+    CliArgs.Cli
   );
 
   if (EFI_ERROR(Status)) {
-    Print(L"Failed to open file! %r\r\n", Status);
-    goto END;
-  }
-  DEBUG((DEBUG_INFO, "B CP 1\n"));
-
-  UINT64 fs2 = FileSize;
-  Status = ShellWriteFile (File, &fs2, FileData);
-
-  if (EFI_ERROR(Status)) {
-    Print(L"Failed to write file! %r\r\n", Status);
-    goto END;
-  }
-  DEBUG((DEBUG_INFO, "B CP 9. Bytes written: %d\n", fs2));
-  Status = ShellCloseFile (File);
-
-  if (EFI_ERROR(Status)) {
-    Print(L"Failed to close file! %r\r\n", Status);
-    goto END;
-  }
-  DEBUG((DEBUG_INFO, "B CP 2\n"));
-  Status = ShellOpenFileByName (
-    L"Hell.efi", 
-    &File, 
-    EFI_FILE_MODE_READ, 0
-  );
-
-  DEBUG((DEBUG_INFO, "B CP 3\n"));
-  if (EFI_ERROR(Status)) {
-    Print(L"Failed to open file!\r\n");
     goto END;
   }
 
-  DEBUG((DEBUG_INFO, "B CP 4\n"));
-  UINT64 Size;
-  ShellGetFileSize(File, &Size);
-  DEBUG((DEBUG_INFO, "File size is: %d\n", Size));
-
-  Size = 2;
-  char buf[3] = {0};
-  ShellReadFile(File, &Size, buf);
-  DEBUG((DEBUG_INFO, buf));
-  DEBUG((DEBUG_INFO, "\n"));
-
-  if (TRUE)
-    goto END;
-
-  Status = ShellExecute (AppImageHandle, L"Hell.efi", FALSE, NULL, NULL);
-  if (EFI_ERROR(Status)) {
-    Print(L"Failed to exe!\n\r");
-    DEBUG((DEBUG_ERROR, "Failed to execute: %r\n", Status));
-    goto END;
-  }
 
 END:
   if (Response) {
@@ -637,10 +749,13 @@ END:
     Response = NULL;
   }
 
+  if (PathToSaveLoadedBinary) {
+    FreePool (PathToSaveLoadedBinary);
+    PathToSaveLoadedBinary = NULL;
+  }
+
   return Status;
 }
-
-
 
 
 
@@ -655,6 +770,11 @@ UefiMain (
 
   AppImageHandle = ImageHandle;
   AppSystemTable = SystemTable;
+
+  if ( EFI_ERROR(Status = ShellInitialize()) ) {
+    Print(L"Failed to initialize shell!\r\n");
+    return Status;
+  }
 
   UINTN Argc;
   CHAR16 **Argv;
@@ -693,10 +813,10 @@ UefiMain (
 
   if (EFI_ERROR(Status = CreateSocket(&CliArgs.Ip4Addr, CliArgs.Port, &TcpIo))) {
     DEBUG((DEBUG_ERROR, "Failed to create socket!\n"));
+    Print(L"Failed to create socket! Check your network connection and try again.\r\n");
     return Status;
   }
 
-  
 
   if (EFI_ERROR(Status = TcpIoConnect(TcpIo, NULL))) {
     DEBUG((DEBUG_ERROR, "Failed on TCP connect!\n"));
@@ -704,16 +824,14 @@ UefiMain (
   }
 
 
-    DEBUG((DEBUG_INFO, "CP3\n"));
   if (CliArgs.ActionListFiles) {
-    DEBUG((DEBUG_INFO, "CP1\n"));
-    DoListFiles();
+    Status = DoListFiles();
   } else if (CliArgs.ActionLoadFile) {
-    DEBUG((DEBUG_INFO, "CP2\n"));
-    DoLoadFile(CliArgs.FileId);
+    Status = DoLoadFile(CliArgs.FileId);
   } else {
     Print(L"No action specified.\r\n");
     Usage(Argv[0]);
+    Status = EFI_INVALID_PARAMETER;
   }
 
   
