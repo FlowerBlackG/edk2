@@ -5,9 +5,9 @@
 
 .PHONY: make-disk-img
 make-disk-img:
+	mkdir -p ./run-ovmf/fs-mnt/
 	dd if=/dev/zero of=run-ovmf/disk.img bs=1M count=128
 	mkfs.fat -F 32 ./run-ovmf/disk.img
-	mkdir -p ./run-ovmf/fs-mnt/
 
 
 .PHONY: mount-disk
