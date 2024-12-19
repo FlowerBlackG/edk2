@@ -862,6 +862,9 @@ UefiMain (
     Status = EFI_INVALID_PARAMETER;
   }
 
+
+  TcpIoReset (TcpIo);
+
   
 END:
   CleanUp();
